@@ -1,26 +1,42 @@
 #import <CoreImage/CoreImage.h>
 #import <AVFoundation/AVFoundation.h>
+#import "TemperatureAndTint.h"
 
+@protocol OnFocusDelegate
+- (void) onFocus;
+@end;
 
 @interface CameraSessionManager : NSObject
-
 - (CameraSessionManager *)init;
-- (void) setupSession:(NSDictionary *)options completion:(void(^)(BOOL started))completion photoSettings:(AVCapturePhotoSettings *)photoSettings;
-- (void) setFlashMode:(NSInteger)flashMode photoSettings:(AVCapturePhotoSettings *)photoSettings completion:(void(^) (BOOL success)) completion;
-- (void)torchSwitch:(NSInteger)torchState completion:(void (^)(BOOL success, NSError *error))completion;
-- (void) switchCameraTo:(NSDictionary *)options completion:(void (^)(BOOL success))completion;
-- (BOOL) deviceHasUltraWideCamera;
-- (BOOL) deviceHasFrontCamera;
-- (BOOL) deviceHasFlash;
-- (void) deallocSession;
+- (NSArray *) getDeviceFormats;
+- (NSArray *) getFocusModes;
+- (NSString *) getFocusMode;
+- (NSString *) setFocusMode:(NSString *)focusMode;
+- (NSArray *) getFlashModes;
+- (NSInteger) getFlashMode;
+- (void) setupSession:(NSString *)defaultCamera completion:(void(^)(BOOL started))completion;
+- (void) switchCamera:(NSString*)direction completion:(void(^)(BOOL switched))completion;
+- (void) setFlashMode:(NSInteger)flashMode photoSettings:(AVCapturePhotoSettings *)photoSettings;
+- (void) setZoom:(CGFloat)desiredZoomFactor;
+- (CGFloat) getZoom;
+- (float) getHorizontalFOV;
+- (CGFloat) getMaxZoom;
+- (NSArray *) getExposureModes;
+- (NSString *) getExposureMode;
+- (NSString *) setExposureMode:(NSString *)exposureMode;
+- (NSArray *) getExposureCompensationRange;
+- (CGFloat) getExposureCompensation;
+- (void) setExposureCompensation:(CGFloat)exposureCompensation;
+- (NSArray *) getSupportedWhiteBalanceModes;
+- (NSString *) getWhiteBalanceMode;
+- (NSString *) setWhiteBalanceMode:(NSString *)whiteBalanceMode;
 - (void) updateOrientation:(AVCaptureVideoOrientation)orientation;
-- (void) startRecording:(NSURL *)fileURL recordingDelegate:(id<AVCaptureFileOutputRecordingDelegate>)recordingDelegate videoDurationMs:(NSInteger)videoDuration;
-- (void) stopRecording;
-- (void) startSession;
+- (void) tapToFocus:(CGFloat)xPoint yPoint:(CGFloat)yPoint;
+- (void) takePictureOnFocus;
+- (BOOL) isTorchActive;
+- (void) setTorchMode;
 - (AVCaptureVideoOrientation) getCurrentOrientation:(UIInterfaceOrientation)toInterfaceOrientation;
-- (AVCaptureSessionPreset)calculateResolution:(NSInteger)targetSize aspectRatio:(NSString *)aspectRatio;
 - (UIInterfaceOrientation) getOrientation;
-- (AVCaptureSessionPreset)validateCameraPreset:(AVCaptureSessionPreset)preset;
 
 @property (atomic) CIFilter *ciFilter;
 @property (nonatomic) NSLock *filterLock;
@@ -28,15 +44,13 @@
 @property (nonatomic) dispatch_queue_t sessionQueue;
 @property (nonatomic) AVCaptureDevicePosition defaultCamera;
 @property (nonatomic) NSInteger defaultFlashMode;
-@property (nonatomic) bool audioConfigured;
+@property (nonatomic) CGFloat videoZoomFactor;
 @property (nonatomic) AVCaptureDevice *device;
 @property (nonatomic) AVCaptureDeviceInput *videoDeviceInput;
 @property (nonatomic) AVCapturePhotoOutput *imageOutput;
 @property (nonatomic) AVCaptureVideoDataOutput *dataOutput;
-@property (nonatomic, weak) id delegate;
-@property (nonatomic) AVCaptureMovieFileOutput *movieFileOutput;
-@property (nonatomic) NSTimer *videoTimer;
-@property (nonatomic) NSInteger targetSize;
-@property (nonatomic) NSString *aspectRatio;
-@property (atomic, assign) BOOL isCameraDirectionFront;
+@property (nonatomic, assign) id delegate;
+@property (nonatomic) NSString *currentWhiteBalanceMode;
+@property (nonatomic) NSDictionary *colorTemperatures;
+
 @end

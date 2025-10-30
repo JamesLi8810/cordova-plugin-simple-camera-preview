@@ -1,6 +1,7 @@
 package com.spoon.simplecamerapreview;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -13,13 +14,18 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
-import android.util.Log;
+import android.util.Size;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.FrameLayout;
-import androidx.camera.core.CameraSelector;
+
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.camera.core.ImageCapture;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PermissionHelper;
@@ -27,10 +33,9 @@ import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.RunnableFuture;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class SimpleCameraPreview extends CordovaPlugin {
 
@@ -40,12 +45,12 @@ public class SimpleCameraPreview extends CordovaPlugin {
     private LocationManager locationManager;
     private LocationListener mLocationCallback;
     private ViewParent webViewParent;
-    private CallbackContext videoCallbackContext;
+
     private static final int containerViewId = 20;
+    private static final int DIRECTION_FRONT = 0;
+    private static final int DIRECTION_BACK = 1;
     private static final int REQUEST_CODE_PERMISSIONS = 4582679;
-    private static final int VIDEO_REQUEST_CODE_PERMISSIONS = 200;
-    private static final String REQUIRED_PERMISSION = Manifest.permission.CAMERA;
-    private static final double DEFAULT_ASPECT_RATIO = 3.0 / 4.0;
+    private static final String[] REQUIRED_PERMISSIONS = {Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION};
 
     public SimpleCameraPreview() {
         super();
@@ -55,6 +60,8 @@ public class SimpleCameraPreview extends CordovaPlugin {
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) {
         try {
             switch (action) {
+                case "setOptions":
+                    return setOptions((JSONObject) args.get(0), callbackContext);
 
                 case "enable":
                     return enable((JSONObject) args.get(0), callbackContext);
@@ -68,26 +75,10 @@ public class SimpleCameraPreview extends CordovaPlugin {
                 case "torchSwitch":
                     return torchSwitch(args.getBoolean(0), callbackContext);
 
-                case "initVideoCallback":
-                    return initVideoCallback(callbackContext);
-
-                case "startVideoCapture":
-                    return startVideoCapture((JSONObject) args.get(0), callbackContext);
-
-                case "stopVideoCapture":
-                    return stopVideoCapture(callbackContext);
-
                 case "deviceHasFlash":
                     return deviceHasFlash(callbackContext);
-
-                case "deviceHasUltraWideCamera":
-                    return deviceHasUltraWideCamera(callbackContext);
-
-                case "deviceHasFrontCamera":
-                    return deviceHasFrontCamera(callbackContext);
-
-                case "switchCameraTo":
-                    return switchCameraTo((JSONObject) args.get(0), callbackContext);
+                case "switchCamera":
+                    return switchCamera(args.getString(0), callbackContext);
                 default:
                     break;
             }
@@ -100,162 +91,68 @@ public class SimpleCameraPreview extends CordovaPlugin {
         }
     }
 
-    private boolean initVideoCallback(CallbackContext callbackContext) {
-        this.videoCallbackContext = callbackContext;
-        JSONObject data = new JSONObject();
+    private boolean setOptions(JSONObject options, CallbackContext callbackContext) {
+        int targetSize = 0;
         try {
-            data.put("videoCallbackInitialized", true);
-        } catch (JSONException e) {
+            options.getString("targetSize");
+            if (!options.getString("targetSize").equals("null")) {
+                targetSize = Integer.parseInt(options.getString("targetSize"));
+            }
+        } catch (JSONException | NumberFormatException e) {
             e.printStackTrace();
-            videoCallbackContext.error("Cannot initialize video callback");
+        }
+        try {
+            if (targetSize > 0) {
+                Size targetResolution = CameraPreviewFragment.calculateResolution(cordova.getContext(), targetSize);
+                ImageCapture.Builder imageCaptureBuilder = new ImageCapture.Builder()
+                        .setTargetResolution(targetResolution);
+                @SuppressLint("RestrictedApi") float height = imageCaptureBuilder.getUseCaseConfig().getTargetResolution().getHeight();
+                @SuppressLint("RestrictedApi") float width = imageCaptureBuilder.getUseCaseConfig().getTargetResolution().getWidth();
+                PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, height / width);
+                callbackContext.sendPluginResult(pluginResult);
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            callbackContext.error(e.getMessage());
             return false;
         }
-        PluginResult result = new PluginResult(PluginResult.Status.OK, data);
-        result.setKeepCallback(true);
-        this.videoCallbackContext.sendPluginResult(result);
-        return true;
-    }
-
-    private boolean startVideoCapture(JSONObject options, CallbackContext callbackContext) {
-        if (fragment == null) {
-            callbackContext.error("Camera is closed");
-            return true;
-        }
-
-        boolean recordWithAudio;
-        try {
-            recordWithAudio = options.getBoolean("recordWithAudio");
-        } catch (JSONException e) {
-            e.printStackTrace();
-            recordWithAudio = false;
-        }
-
-        int videoDuration;
-        try {
-            videoDuration = options.getInt("videoDurationMs");
-        } catch (JSONException e) {
-            e.printStackTrace();
-            videoDuration = 3000;
-        }
-
-        if (recordWithAudio && !PermissionHelper.hasPermission(this, Manifest.permission.RECORD_AUDIO)) {
-            String[] permissions = {Manifest.permission.RECORD_AUDIO};
-            PermissionHelper.requestPermissions(this, VIDEO_REQUEST_CODE_PERMISSIONS, permissions);
-            callbackContext.success();
-            return true;
-        }
-
-        if (this.videoCallbackContext != null) {
-            fragment.startVideoCapture(new VideoCallback() {
-                public void onStart(Boolean recording) {
-                    JSONObject data = new JSONObject();
-                    if (recording) {
-                        try {
-                            data.put("recording", true);
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                            videoCallbackContext.error("Cannot send recording data");
-                            return;
-                        }
-
-                        PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, data);
-                        pluginResult.setKeepCallback(true);
-                        videoCallbackContext.sendPluginResult(pluginResult);
-                    }
-                }
-
-                public void onStop(Boolean recording, String nativePath, String thumbnail) {
-                    JSONObject data = new JSONObject();
-                    try {
-                        data.put("recording", false);
-                        data.put("nativePath", nativePath);
-                        data.put("thumbnail", thumbnail);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                        videoCallbackContext.error("Cannot send recording data");
-                        return;
-                    }
-                    PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, data);
-                    pluginResult.setKeepCallback(true);
-                    videoCallbackContext.sendPluginResult(pluginResult);
-                }
-
-                @Override
-                public void onError(String errMessage) {
-                    JSONObject data = new JSONObject();
-                    try {
-                        data.put("error", errMessage);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                        return;
-                    }
-                    PluginResult pluginResult = new PluginResult(PluginResult.Status.ERROR, data);
-                    pluginResult.setKeepCallback(true);
-                    videoCallbackContext.sendPluginResult(pluginResult);
-                }
-            }, recordWithAudio, videoDuration);
-        }
-        callbackContext.success();
-        return true;
-    }
-
-    private boolean stopVideoCapture(CallbackContext callbackContext) {
-        if (fragment == null) {
-            callbackContext.error("Camera is closed");
-            return true;
-        }
-
-        if (this.videoCallbackContext != null) {
-            fragment.stopVideoCapture();
-        }
-
-        callbackContext.success();
-        return true;
     }
 
     private boolean enable(JSONObject options, CallbackContext callbackContext) {
         webView.getView().setBackgroundColor(0x00000000);
         // Request focus on webView as page needs to be clicked/tapped to get focus on page events
         webView.getView().requestFocus();
-        if (!PermissionHelper.hasPermission(this, REQUIRED_PERMISSION)) {
+        if (!this.hasAllPermissions()) {
             this.enableCallbackContext = callbackContext;
             this.options = options;
             this.requestPermissions();
+
             return true;
         }
 
         if (fragment != null) {
             callbackContext.error("Camera already started");
+
             return true;
         }
 
-        int cameraDirection = getCameraDirection(options);
-        int targetSize = 0;
+        int cameraDirection;
+
         try {
-            if (options.getString("targetSize") != null && !options.getString("targetSize").equals("null")) {
+            cameraDirection = options.getString("direction").equals("front") ? SimpleCameraPreview.DIRECTION_FRONT : SimpleCameraPreview.DIRECTION_BACK;
+        } catch (JSONException e) {
+            cameraDirection = SimpleCameraPreview.DIRECTION_BACK;
+        }   
+
+        int targetSize = 0;
+
+        try {
+            options.getString("targetSize");
+            if (!options.getString("targetSize").equals("null")) {
                 targetSize = Integer.parseInt(options.getString("targetSize"));
             }
         } catch (JSONException | NumberFormatException e) {
-            e.printStackTrace();
-        }
-
-        double aspectRatio = DEFAULT_ASPECT_RATIO; // Default aspect ratio 3:4
-        String aspectRatioOption = null;
-        try {
-            aspectRatioOption = options.getString("aspectRatio");
-        } catch (JSONException e) {
-            Log.e("Error", "enable: " + e.getMessage());
-        }
-        if (aspectRatioOption != null && !aspectRatioOption.equals("null")) {
-            aspectRatio = getAspectRatio(aspectRatioOption);
-        }
-
-        String lens = "default";
-        try {
-            if (options.getString("lens") != null && !options.getString("lens").equals("null") && !options.getString("lens").isEmpty()) {
-                lens = options.getString("lens");
-            }
-        } catch (JSONException e) {
             e.printStackTrace();
         }
 
@@ -265,52 +162,56 @@ public class SimpleCameraPreview extends CordovaPlugin {
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        try {
-            cameraPreviewOptions.put("lens", lens);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        try {
-            cameraPreviewOptions.put("direction", cameraDirection);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        try {
-            cameraPreviewOptions.put("aspectRatio", aspectRatio);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
 
-        fragment = new CameraPreviewFragment(cameraPreviewOptions, (err) -> {
+        fragment = new CameraPreviewFragment(cameraDirection, (err) -> {
             if (err != null) {
                 callbackContext.error(err.getMessage());
                 return;
             }
             PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, "Camera started");
             callbackContext.sendPluginResult(pluginResult);
-        });
+        }, cameraPreviewOptions, this);
 
         try {
-            updateContainerView(options);
-            fetchLocation();
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            callbackContext.error(e.getMessage());
-            return false;
-        }
-    }
+            RunnableFuture<Void> addViewTask = new FutureTask<>(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        DisplayMetrics metrics = new DisplayMetrics();
+                        cordova.getActivity().getWindowManager().getDefaultDisplay().getMetrics(metrics);
+                        int x = Math.round(getIntegerFromOptions(options, "x") * metrics.density);
+                        int y = Math.round(getIntegerFromOptions(options, "y") * metrics.density);
+                        int width = Math.round(getIntegerFromOptions(options, "width") * metrics.density);
+                        int height = Math.round(getIntegerFromOptions(options, "height") * metrics.density);
 
-    private int getIntegerFromOptions(JSONObject options, String key) {
-        try {
-            return options.getInt(key);
-        } catch (JSONException error) {
-            return 0;
-        }
-    }
+                        if (width == 0) {
+                            width = metrics.widthPixels;
+                        }
 
-    public void fetchLocation() {
-        if (ContextCompat.checkSelfPermission(cordova.getActivity(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        if (height == 0) {
+                            height = metrics.heightPixels;
+                        }
+
+                        FrameLayout containerView = cordova.getActivity().findViewById(containerViewId);
+
+                        if (containerView == null) {
+                            containerView = new FrameLayout(cordova.getActivity().getApplicationContext());
+                            containerView.setId(containerViewId);
+                            FrameLayout.LayoutParams containerLayoutParams = new FrameLayout.LayoutParams(width, height);
+                            containerLayoutParams.setMargins(x, y, 0, 0);
+                            cordova.getActivity().addContentView(containerView, containerLayoutParams);
+                        }
+                        cordova.getActivity().getWindow().getDecorView().setBackgroundColor(Color.BLACK);
+                        webViewParent = webView.getView().getParent();
+                        webView.getView().bringToFront();
+                        cordova.getActivity().getSupportFragmentManager().beginTransaction().replace(containerViewId, fragment).commitAllowingStateLoss();
+                    }
+                },
+                null
+            );
+            cordova.getActivity().runOnUiThread(addViewTask);
+            addViewTask.get();
+
             mLocationCallback = new LocationListener() {
                 @Override
                 public void onLocationChanged(Location location) {
@@ -334,6 +235,43 @@ public class SimpleCameraPreview extends CordovaPlugin {
 
                 }
             };
+            fetchLocation();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            callbackContext.error(e.getMessage());
+            return false;
+        }
+    }
+
+    private int getIntegerFromOptions(JSONObject options, String key) {
+        try {
+            return options.getInt(key);
+        } catch (JSONException error) {
+            return 0;
+        }
+    }
+
+    public void updateLayout() {
+        FrameLayout containerView = cordova.getActivity().findViewById(containerViewId);
+
+        if (containerView != null) {
+            DisplayMetrics metrics = new DisplayMetrics();
+
+            cordova.getActivity().getWindowManager().getDefaultDisplay().getMetrics(metrics);
+
+            int width = metrics.widthPixels;
+            int height = metrics.heightPixels;
+
+            FrameLayout.LayoutParams containerLayoutParams = new FrameLayout.LayoutParams(width, height);
+            containerLayoutParams.setMargins(0, 0, 0, 0);
+
+            containerView.setLayoutParams(containerLayoutParams);
+        }
+    }
+
+    public void fetchLocation() {
+        if (ContextCompat.checkSelfPermission(cordova.getActivity(), REQUIRED_PERMISSIONS[1]) == PackageManager.PERMISSION_GRANTED) {
             if (locationManager == null) {
                 locationManager = (LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE);
             }
@@ -364,11 +302,6 @@ public class SimpleCameraPreview extends CordovaPlugin {
     }
 
     private boolean deviceHasFlash(CallbackContext callbackContext) {
-        if (fragment == null) {
-            callbackContext.error("Camera is closed");
-            return true;
-        }
-
         fragment.hasFlash((boolean result) -> {
             PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, result);
             callbackContext.sendPluginResult(pluginResult);
@@ -376,29 +309,38 @@ public class SimpleCameraPreview extends CordovaPlugin {
         return true;
     }
 
-    private boolean deviceHasUltraWideCamera(CallbackContext callbackContext) {
+    private boolean switchCamera(String direction, CallbackContext callbackContext) {
         if (fragment == null) {
-           callbackContext.error("Camera is closed");
+            callbackContext.error("Camera already closed");
             return true;
         }
 
-        fragment.deviceHasUltraWideCamera((boolean result) -> {
-            PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, result);
-            callbackContext.sendPluginResult(pluginResult);
-        });
-        return true;
-    }
+        try {
+            if (webViewParent != null) {
+                RunnableFuture<Void> switchViewTask = new FutureTask<>(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                fragment.switchCamera(direction, (boolean result) -> {
+                                    PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, result);
+                                    callbackContext.sendPluginResult(pluginResult);
+                                });
+                            }
+                        },
+                        null
+                );
+                cordova.getActivity().runOnUiThread(switchViewTask);
+                switchViewTask.get();
+            }
 
-    private boolean deviceHasFrontCamera(CallbackContext callbackContext) {
-        if (fragment == null) {
-            callbackContext.error("Camera is closed");
-            return true;
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            callbackContext.error(e.getMessage());
+
         }
 
-        fragment.deviceHasFrontCamera((boolean result) -> {
-            PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, result);
-            callbackContext.sendPluginResult(pluginResult);
-        });
         return true;
     }
 
@@ -453,127 +395,23 @@ public class SimpleCameraPreview extends CordovaPlugin {
         }
     }
 
-    private static int getCameraDirection(JSONObject options) {
-        try {
-            return options.getString("direction").equals("front")
-                    ? CameraSelector.LENS_FACING_FRONT
-                    : CameraSelector.LENS_FACING_BACK;
-        } catch (JSONException e) {
-            return CameraSelector.LENS_FACING_BACK;
-        }
-    }
-
-    private static double getAspectRatio(String aspectRatio) {
-        Pattern pattern = Pattern.compile("\\b([1-9]\\d*):([1-9]\\d*)\\b");
-        Matcher matcher = pattern.matcher(aspectRatio);
-        if (!matcher.matches()) {
-            return DEFAULT_ASPECT_RATIO;
-        }
-
-        String[] ratioParts = aspectRatio.split(":");
-        double width = Double.parseDouble(ratioParts[0]);
-        double height = Double.parseDouble(ratioParts[1]);
-        return width / height;
-    }
-
-    private boolean switchCameraTo(JSONObject options, CallbackContext callbackContext) {
-        if (fragment == null) {
-            callbackContext.error("Camera is closed, cannot switch camera");
-            return true;
-        }
-
-        int cameraDirection = getCameraDirection(options);
-        try {
-            options.put("direction", cameraDirection);
-        } catch (JSONException e) {
-            callbackContext.error("Unable to set direction in options");
-            return true;
-        }
-
-        double aspectRatio = DEFAULT_ASPECT_RATIO; // Default aspect ratio 3:4
-        String aspectRatioOption = null;
-        try {
-            aspectRatioOption = options.getString("aspectRatio");
-        } catch (JSONException e) {
-            Log.e("Error", "switchCameraTo: " + e.getMessage());
-        }
-        if (aspectRatioOption != null && !aspectRatioOption.equals("null")) {
-            aspectRatio = getAspectRatio(aspectRatioOption);
-        }
-
-        try {
-            options.put("aspectRatio", aspectRatio);
-        } catch (JSONException e) {
-            callbackContext.error("Unable to set aspectRatio in options");
-            return true;
-        }
-
-        if (aspectRatio != fragment.getAspectRatio()) {
-            try {
-                updateContainerView(options);
-            } catch (Exception e) {
-                Log.e("Error", "switchCameraTo: " + e.getMessage());
-                callbackContext.error("Failed to update camera preview size: " + e.getMessage());
+    public boolean hasAllPermissions() {
+        for(String p : REQUIRED_PERMISSIONS) {
+            if(!PermissionHelper.hasPermission(this, p)) {
                 return false;
             }
         }
-
-        fragment.switchCameraTo(options, (boolean result) -> {
-            PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, result);
-            callbackContext.sendPluginResult(pluginResult);
-        });
         return true;
     }
 
-    private void updateContainerView(JSONObject options) throws Exception {
-        RunnableFuture<Void> updateViewTask = new FutureTask<>(
-            new Runnable() {
-                @Override
-                public void run() {
-                    DisplayMetrics metrics = new DisplayMetrics();
-                    cordova.getActivity().getWindowManager().getDefaultDisplay().getMetrics(metrics);
-
-                    int x = Math.round(getIntegerFromOptions(options, "x") * metrics.density);
-                    int y = Math.round(getIntegerFromOptions(options, "y") * metrics.density);
-                    int width = Math.round(getIntegerFromOptions(options, "width") * metrics.density);
-                    int height = Math.round(getIntegerFromOptions(options, "height") * metrics.density);
-
-                    FrameLayout containerView = cordova.getActivity().findViewById(containerViewId);
-                    if (containerView == null) {
-                        containerView = new FrameLayout(cordova.getActivity().getApplicationContext());
-                        containerView.setId(containerViewId);
-                        FrameLayout.LayoutParams containerLayoutParams = new FrameLayout.LayoutParams(width, height);
-                        containerLayoutParams.setMargins(x, y, 0, 0);
-                        cordova.getActivity().addContentView(containerView, containerLayoutParams);
-                    } else {
-                        FrameLayout.LayoutParams containerLayoutParams = new FrameLayout.LayoutParams(width, height);
-                        containerLayoutParams.setMargins(x, y, 0, 0);
-                        containerView.setLayoutParams(containerLayoutParams);
-                    }
-
-                    cordova.getActivity().getWindow().getDecorView().setBackgroundColor(Color.BLACK);
-                    webView.getView().bringToFront();
-                    cordova.getActivity().getSupportFragmentManager().beginTransaction().replace(containerViewId, fragment).commitAllowingStateLoss();
-                }
-            },
-            null
-        );
-        cordova.getActivity().runOnUiThread(updateViewTask);
-        updateViewTask.get();
-    }
-
-
     public void requestPermissions() {
-        String[] permissions = {REQUIRED_PERMISSION};
-        PermissionHelper.requestPermissions(this, REQUEST_CODE_PERMISSIONS, permissions);
+        PermissionHelper.requestPermissions(this, REQUEST_CODE_PERMISSIONS, REQUIRED_PERMISSIONS);
     }
 
     public boolean permissionsGranted(int[] grantResults) {
-        if (grantResults.length > 0) {
-            for (int result : grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    return false;
-                }
+        for (int result : grantResults) {
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                return false;
             }
         }
         return true;
@@ -625,23 +463,6 @@ public class SimpleCameraPreview extends CordovaPlugin {
             } else {
                 enable(this.options, this.enableCallbackContext);
             }
-        }
-        if (requestCode == VIDEO_REQUEST_CODE_PERMISSIONS && this.videoCallbackContext != null) {
-            if (grantResults.length < 1) { return; }
-
-            boolean permissionsGranted = this.permissionsGranted(grantResults);
-            JSONObject data = new JSONObject();
-            try {
-                data.put("restartVideoCaptureWithAudio", permissionsGranted);
-            } catch (JSONException e) {
-                e.printStackTrace();
-                videoCallbackContext.error("Cannot start video");
-                return;
-            }
-
-            PluginResult result = new PluginResult(PluginResult.Status.OK, data);
-            result.setKeepCallback(true);
-            this.videoCallbackContext.sendPluginResult(result);
         }
     }
 

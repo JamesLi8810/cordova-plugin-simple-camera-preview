@@ -4,26 +4,46 @@
 
 #import "CameraSessionManager.h"
 #import "CameraRenderController.h"
-#import <CoreLocation/CoreLocation.h>
-@interface SimpleCameraPreview : CDVPlugin <AVCapturePhotoCaptureDelegate, CLLocationManagerDelegate, AVCaptureFileOutputRecordingDelegate>{
-    CLLocationManager *locationManager;
-    CLLocation* currentLocation;
-}
+
+@interface SimpleCameraPreview : CDVPlugin <AVCapturePhotoCaptureDelegate, FocusDelegate>
 
 - (void) enable:(CDVInvokedUrlCommand*)command;
 - (void) disable:(CDVInvokedUrlCommand*)command;
+- (void) showCamera:(CDVInvokedUrlCommand*)command;
+- (void) hideCamera:(CDVInvokedUrlCommand*)command;
+- (void) getFocusMode:(CDVInvokedUrlCommand*)command;
+- (void) setFocusMode:(CDVInvokedUrlCommand*)command;
+- (void) getFlashMode:(CDVInvokedUrlCommand*)command;
+- (void) setFlashMode:(CDVInvokedUrlCommand*)command;
+- (void) setZoom:(CDVInvokedUrlCommand*)command;
+- (void) getZoom:(CDVInvokedUrlCommand*)command;
+- (void) getHorizontalFOV:(CDVInvokedUrlCommand*)command;
+- (void) getMaxZoom:(CDVInvokedUrlCommand*)command;
+- (void) getExposureModes:(CDVInvokedUrlCommand*)command;
+- (void) getExposureMode:(CDVInvokedUrlCommand*)command;
+- (void) setExposureMode:(CDVInvokedUrlCommand*)command;
+- (void) getExposureCompensation:(CDVInvokedUrlCommand*)command;
+- (void) setExposureCompensation:(CDVInvokedUrlCommand*)command;
+- (void) getExposureCompensationRange:(CDVInvokedUrlCommand*)command;
+- (void) setPreviewSize: (CDVInvokedUrlCommand*)command;
+- (void) switchCamera:(CDVInvokedUrlCommand*)command;
 - (void) capture:(CDVInvokedUrlCommand*)command;
-- (void) setSize:(CDVInvokedUrlCommand*)command;
-- (void) torchSwitch: (CDVInvokedUrlCommand*)command;
-- (void) switchCameraTo: (CDVInvokedUrlCommand*) command;
-- (void) deviceHasUltraWideCamera: (CDVInvokedUrlCommand*) command;
-- (void) deviceHasFrontCamera: (CDVInvokedUrlCommand*) command;
+- (void) takeSnapshot:(CDVInvokedUrlCommand*)command;
+- (void) setColorEffect:(CDVInvokedUrlCommand*)command;
+- (void) getSupportedPictureSizes:(CDVInvokedUrlCommand*)command;
+- (void) getSupportedFlashModes:(CDVInvokedUrlCommand*)command;
+- (void) getSupportedFocusModes:(CDVInvokedUrlCommand*)command;
+- (void) tapToFocus:(CDVInvokedUrlCommand*)command;
+- (void) getSupportedWhiteBalanceModes:(CDVInvokedUrlCommand*)command;
+- (void) getWhiteBalanceMode:(CDVInvokedUrlCommand*)command;
+- (void) setWhiteBalanceMode:(CDVInvokedUrlCommand*)command;
+- (void) invokeTapToFocus:(CGPoint) point;
 - (void) deviceHasFlash: (CDVInvokedUrlCommand*)command;
-@property (nonatomic) CDVInvokedUrlCommand *videoCallbackContext;
+
 @property (nonatomic) CameraSessionManager *sessionManager;
 @property (nonatomic) CameraRenderController *cameraRenderController;
-@property (nonatomic) NSString *onPictureTakenHandlerId;
 @property (nonatomic) AVCapturePhotoSettings *photoSettings;
-@property (nonatomic) NSString *onCameraEnabledHandlerId;
+@property (nonatomic) NSString *onPictureTakenHandlerId;
+@property (nonatomic) BOOL storeToFile;
 
 @end

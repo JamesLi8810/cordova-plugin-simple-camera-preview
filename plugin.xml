@@ -66,6 +66,8 @@
     <header-file src="src/ios/CameraRenderController.h" />
     <source-file src="src/ios/CameraRenderController.m" />
     <source-file src="src/ios/Shaders.metal" />
+    <header-file src="src/ios/TemperatureAndTint.h" />
+    <source-file src="src/ios/TemperatureAndTint.m" />
 
     <framework src="ImageIO.framework" weak="true" />
     <framework src="MobileCoreServices.framework" />
