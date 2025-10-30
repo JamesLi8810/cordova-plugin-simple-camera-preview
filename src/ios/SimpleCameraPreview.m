@@ -264,12 +264,11 @@ BOOL torchActivated = false;
 }
 
 - (void) capture:(CDVInvokedUrlCommand*)command {
-    BOOL useFlash = [[command.arguments objectAtIndex:0] boolValue];
-    if (torchActivated)
-        useFlash = false;
+    NSString *useFlash = command.arguments[0];
+    
     self.photoSettings = [AVCapturePhotoSettings photoSettingsWithFormat:@{AVVideoCodecKey : AVVideoCodecTypeJPEG}];
     if (self.sessionManager != nil)
-    [self.sessionManager setFlashMode:useFlash? AVCaptureFlashModeOn: AVCaptureFlashModeOff photoSettings:self.photoSettings completion:^(BOOL success) {
+    [self.sessionManager setFlashMode:[useFlash isEqual: @"ON"] ? 1 : [useFlash isEqual: @"OFF"] ? 0 : 2 photoSettings:self.photoSettings completion:^(BOOL success) {
         CDVPluginResult *pluginResult;
         if (self.cameraRenderController != NULL) {
             self.onPictureTakenHandlerId = command.callbackId;
