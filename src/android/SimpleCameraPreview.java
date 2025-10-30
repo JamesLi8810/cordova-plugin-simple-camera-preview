@@ -63,7 +63,7 @@ public class SimpleCameraPreview extends CordovaPlugin {
                     return disable(callbackContext);
 
                 case "capture":
-                    return capture(args.getBoolean(0), callbackContext);
+                    return capture(args.getString(0), callbackContext);
 
                 case "torchSwitch":
                     return torchSwitch(args.getBoolean(0), callbackContext);
@@ -345,7 +345,7 @@ public class SimpleCameraPreview extends CordovaPlugin {
         }
     }
 
-    private boolean capture(boolean useFlash, CallbackContext callbackContext) {
+    private boolean capture(String useFlash, CallbackContext callbackContext) {
         if (fragment == null) {
             callbackContext.error("Camera is closed");
             return true;

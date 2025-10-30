@@ -6,84 +6,84 @@ SimpleCameraPreview.videoInitialized = false;
 SimpleCameraPreview.videoCallback = null;
 
 SimpleCameraPreview.startVideoCapture = function (options, onSuccess, onError) {
-  if (!SimpleCameraPreview.videoCallback) {
-    console.error("Call initVideoCallback first");
-    onError("Call initVideoCallback first");
-    return;
-  }
+	if (!SimpleCameraPreview.videoCallback) {
+		console.error("Call initVideoCallback first");
+		onError("Call initVideoCallback first");
+		return;
+	}
 
-  if (!SimpleCameraPreview.videoInitialized) {
-    console.error("videoCallback not initialized");
-    onError("videoCallback not initialized");
-    return;
-  }
-  
-  options = options || {};
-  options.recordWithAudio = options.recordWithAudio != null ? options.recordWithAudio : true;
-  options.videoDurationMs = options.videoDurationMs != null ? options.videoDurationMs : 3000;
-  exec(onSuccess, onError, PLUGIN_NAME, "startVideoCapture", [options]);
+	if (!SimpleCameraPreview.videoInitialized) {
+		console.error("videoCallback not initialized");
+		onError("videoCallback not initialized");
+		return;
+	}
+
+	options = options || {};
+	options.recordWithAudio = options.recordWithAudio != null ? options.recordWithAudio : true;
+	options.videoDurationMs = options.videoDurationMs != null ? options.videoDurationMs : 3000;
+	exec(onSuccess, onError, PLUGIN_NAME, "startVideoCapture", [options]);
 };
 
 SimpleCameraPreview.stopVideoCapture = function (onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "stopVideoCapture");
+	exec(onSuccess, onError, PLUGIN_NAME, "stopVideoCapture");
 };
 
 SimpleCameraPreview.initVideoCallback = function (onSuccess, onError, callback) {
-    this.videoCallback = callback;
-    exec(
-            (info) => {
-              if (info.videoCallbackInitialized) {
-                SimpleCameraPreview.videoInitialized = true;
-                onSuccess();
-              }
-              this.videoCallback(info);
-            } ,
-            onError,
-            PLUGIN_NAME,
-            "initVideoCallback",
-            []
-        );
-}
+	this.videoCallback = callback;
+	exec(
+		(info) => {
+			if (info.videoCallbackInitialized) {
+				SimpleCameraPreview.videoInitialized = true;
+				onSuccess();
+			}
+			this.videoCallback(info);
+		},
+		onError,
+		PLUGIN_NAME,
+		"initVideoCallback",
+		[]
+	);
+};
 
 SimpleCameraPreview.enable = function (options, onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "enable", [options]);
+	exec(onSuccess, onError, PLUGIN_NAME, "enable", [options]);
 };
 
 SimpleCameraPreview.disable = function (onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "disable", []);
+	exec(onSuccess, onError, PLUGIN_NAME, "disable", []);
 };
 
 SimpleCameraPreview.capture = function (options, onSuccess, onError) {
-  options = options || {};
-  options.flash = options.flash || false;
-  exec(onSuccess, onError, PLUGIN_NAME, "capture", [options.flash]);
+	options = options || {};
+	options.flash = options.flash;
+	exec(onSuccess, onError, PLUGIN_NAME, "capture", [options.flash]);
 };
 
 SimpleCameraPreview.setSize = function (options, onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "setSize", [options]);
+	exec(onSuccess, onError, PLUGIN_NAME, "setSize", [options]);
 };
 
 SimpleCameraPreview.torchSwitch = function (options, onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "torchSwitch", [options]);
+	exec(onSuccess, onError, PLUGIN_NAME, "torchSwitch", [options]);
 };
 
 SimpleCameraPreview.switchCameraTo = function (options, onSuccess, onError) {
-  options = options || {};
-  options.direction = options.direction || "back";
-  options.lens = options.direction === "back" ? options.lens : "default";
-  exec(onSuccess, onError, PLUGIN_NAME, "switchCameraTo", [options]);
+	options = options || {};
+	options.direction = options.direction || "back";
+	options.lens = options.direction === "back" ? options.lens : "default";
+	exec(onSuccess, onError, PLUGIN_NAME, "switchCameraTo", [options]);
 };
 
 SimpleCameraPreview.deviceHasFlash = function (onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "deviceHasFlash", []);
+	exec(onSuccess, onError, PLUGIN_NAME, "deviceHasFlash", []);
 };
 
 SimpleCameraPreview.deviceHasUltraWideCamera = function (onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "deviceHasUltraWideCamera", []);
+	exec(onSuccess, onError, PLUGIN_NAME, "deviceHasUltraWideCamera", []);
 };
 
 SimpleCameraPreview.deviceHasFrontCamera = function (onSuccess, onError) {
-  exec(onSuccess, onError, PLUGIN_NAME, "deviceHasFrontCamera", []);
-}
+	exec(onSuccess, onError, PLUGIN_NAME, "deviceHasFrontCamera", []);
+};
 
 module.exports = SimpleCameraPreview;

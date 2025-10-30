@@ -455,13 +455,7 @@ public class CameraPreviewFragment extends Fragment {
     }
 
 
-    public void takePicture(boolean useFlash, CameraCallback takePictureCallback) {
-        if (torchActivated) {
-            useFlash = true;
-        } else {
-            camera.getCameraControl().enableTorch(useFlash);
-        }
-
+    public void takePicture(String useFlash, CameraCallback takePictureCallback) {
         UUID uuid = UUID.randomUUID();
 
         File imgFile = new File(
@@ -474,6 +468,17 @@ public class CameraPreviewFragment extends Fragment {
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                     .setTargetRotation(getActivity().getWindowManager().getDefaultDisplay().getRotation())
                     .build();
+        }
+
+        if (useFlash.equals("ON")) {
+            imageCapture.setFlashMode(ImageCapture.FLASH_MODE_ON);
+            camera.getCameraControl().enableTorch(true);
+        } else if (useFlash.equals("OFF")) {
+            imageCapture.setFlashMode(ImageCapture.FLASH_MODE_OFF);
+            camera.getCameraControl().enableTorch(false);
+        } else {
+            imageCapture.setFlashMode(ImageCapture.FLASH_MODE_AUTO);
+            camera.getCameraControl().enableTorch(true);
         }
 
         ImageCapture.OutputFileOptions outputOptions = new ImageCapture.OutputFileOptions.Builder(imgFile).build();
