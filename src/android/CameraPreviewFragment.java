@@ -195,7 +195,6 @@ public class CameraPreviewFragment extends Fragment {
                     imageCapture
             );
         } catch (IllegalArgumentException e) {
-            // Error with result in capturing image with default resolution
             e.printStackTrace();
             imageCapture = new ImageCapture.Builder()
                     .build();
@@ -214,11 +213,9 @@ public class CameraPreviewFragment extends Fragment {
         }
     }
 
-    //    Another way to Calculate
+    
     @SuppressLint("RestrictedApi")
     public Size calculateResolution(ProcessCameraProvider cameraProvider, CameraSelector cameraSelector, int targetSize, int direction) {
-        // tempCamera to calculate targetResolution
-
         if (direction == 1) {
             if (oBackCameraResolution != null) {
                 return oBackCameraResolution;
@@ -326,12 +323,6 @@ public class CameraPreviewFragment extends Fragment {
     }
 
     public void takePicture(String useFlash, CameraCallback takePictureCallback) {
-//        if (torchActivated) {
-//            useFlash = true;
-//        } else {
-//            camera.getCameraControl().enableTorch(useFlash);
-//        }
-
         UUID uuid = UUID.randomUUID();
 
         File imgFile = new File(
